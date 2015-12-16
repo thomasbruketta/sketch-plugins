@@ -1,0 +1,181 @@
+// This plugin searches the document for all istances of a user input font and replaces them with set font
+
+var fontManager = NSFontManager.alloc();
+var fontList = fontManager.availableFontFamilies();
+log("font item 1 " + fontList[0]);
+
+var doc = doc || context.document,
+    selection = selection || context.selection
+
+var find_font_name = [doc askForUserInput:"Type a font that you would like to replace:" initialValue:"Arial"];
+var find_font_clean = cleanString(find_font_name);
+
+var fonts_found = [];
+
+function createSelect(msg, items, selectedItemIndex){
+  selectedItemIndex = selectedItemIndex || 0
+
+  var accessory = NSComboBox.alloc().initWithFrame(NSMakeRect(0,0,200,25))
+  accessory.addItemsWithObjectValues(items)
+  accessory.selectItemAtIndex(selectedItemIndex)
+
+  var alert = NSAlert.alloc().init();
+  alert.setMessageText(msg);
+  alert.addButtonWithTitle('OK')
+  alert.addButtonWithTitle('Cancel');
+  alert.setAccessoryView(accessory);
+
+  var responseCode = alert.runModal()
+  var sel = accessory.indexOfSelectedItem()
+
+  return [responseCode, sel]
+}
+
+//removes caps and whitespace
+function cleanString(string){
+  return string.toLowerCase().replace(/\s/g, '');
+}
+
+//Checks to see if string contains substring
+function containsString(string, sub){
+  // log("string is " + string);
+  // log("sub is " + sub);
+  return string.indexOf(sub) > -1 ? true : false;
+}
+
+//args: layer to be searched, fontName to search for, if returning search results as array
+function check_layer(layer, _isSearch, query){
+  var klass = [layer className];
+  // log("Checking layer " + layer + " of klass: " + klass)
+  if (klass == "MSTextLayer" ) {
+    var layer_font_name = String(layer.fontPostscriptName());
+    var layer_font_clean = cleanString(layer_font_name);
+
+    //Add found font to array if searching
+    if ( _isSearch ) {
+
+      var _isNotInArray = fonts_found.indexOf(layer_font_name) === -1;
+
+      //check to see if layer contains search string
+      if ( containsString( layer_font_clean, find_font_clean ) && _isNotInArray ){
+        fonts_found.push( layer_font_name );
+      }
+    }
+    //Otherwise replace fonts
+    else {
+      var queryClean = cleanString(query);
+
+      // var find_font_trim = find_font_name.toLowerCase().replace(/\s/g, '');
+      // var current_font_trim = layer_font_name.toLowerCase().replace(/\s/g, '');
+      //Does the current layer contain the find font, if so replace it
+      // var _fontFound = current_font_trim.indexOf(find_font_trim) > -1 ? true : false;
+      var _fontFound = containsString( layer_font_clean, queryClean );
+      // log("Found font " + _fontFound);
+
+      if ( _fontFound ) {
+          layer.setFontPostscriptName(replace_font_name);
+      }
+    }
+  }
+  if ( klass == "MSPage" || klass == "MSLayerGroup" || klass == "MSArtboardGroup" ){
+    var sublayers = [layer layers]
+    // log("This is a group/artboard/page with " + [sublayers count] + " sublayers")
+    for(var i=0; i < [sublayers count]; i++) {
+      var sublayer = [sublayers objectAtIndex:i]
+      check_layer(sublayer, _isSearch, query);
+    }
+  }
+}
+
+//Search document for fonts, optionally returns an array of found founds
+function searchDocument( _isSearch, query ){
+  if(selection && [selection count]){
+    for (var i = 0; i < [selection count]; i++) {
+      check_layer([selection objectAtIndex:i], _isSearch, query)
+    }
+  } else {
+    // Otherwise, loop trough pages, artboards & layers
+    var pages = [doc pages]
+    for (var i = 0; i < [pages count]; i++) {
+      var current_page = [pages objectAtIndex:i],
+          artboards = [current_page artboards]
+      if ([artboards count]) {
+        // log("Traversing artboards")
+        for (var i = 0; i < [artboards count]; i++) {
+          var artboard = [artboards objectAtIndex:i]
+          check_layer(artboard, _isSearch, query)
+        }
+      } else {
+        // log("Page has no artboards")
+        check_layer(current_page, _isSearch, query)
+      }
+    }
+  }
+}
+
+// Searches font list for matching fonts and returns them in an array
+function findFontMatches(font){
+  var matches = [];
+  for (var i = 0; i < [fontList count]; i++){
+    var cleanItem = cleanString( String(fontList[i]) );
+    if( containsString( cleanItem , font ) ){
+      matches.push( fontList[i] );
+    }
+  }
+  log("matches are " + matches);
+  return matches;
+}
+
+searchDocument(true);
+
+tryFindAgain();
+
+//If no fonts found ask user to try again
+function tryFindAgain(){
+  if ( !fonts_found.length ){
+    find_font_name = [doc askForUserInput:"No fonts found, try again" initialValue:"Arial"];
+    find_font_clean = cleanString(find_font_name);
+    searchDocument(true);
+    tryFindAgain();
+  } else {
+    return;
+  }
+}
+
+log("the following fonts were found " + fonts_found);
+
+var choice = createSelect('The following fonts match your search. Which would you like to change?', fonts_found, 0);
+var selection = choice[1];
+var choiceString = fonts_found[selection];
+log("user selected " + choiceString);
+
+var replace_font_name = [doc askForUserInput:"Replace " + choiceString + " with:" initialValue:"Arial"];
+var replace_font_clean = cleanString(replace_font_name);
+
+var replace_options = findFontMatches(replace_font_clean);
+
+tryReplaceAgain();
+
+function tryReplaceAgain(){
+  if ( !replace_options.length ){
+    replace_font_name = [doc askForUserInput:"No fonts found, try again" initialValue:"Arial"];
+    replace_font_clean = cleanString(replace_font_name);
+    replace_options = findFontMatches(replace_font_clean);
+    tryReplaceAgain();
+  } else {
+    return;
+  }
+}
+
+var replaceChoice = createSelect('The following fonts match your search. Which would you like to use?', replace_options, 0);
+var replaceSelection = replaceChoice[1];
+
+//Set the replacement font to the one chosen by the user
+replace_font_name = replace_options[replaceSelection];
+
+searchDocument(false, choiceString);
+
+
+doc.showMessage(choiceString + " has been replaced with " + replace_font_name);
+
+

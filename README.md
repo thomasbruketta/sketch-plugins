@@ -1,2 +1,2 @@
 # sketch-plugins
-Instrument plugins for sketch
+Custom plugins for sketch
