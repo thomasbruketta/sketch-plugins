@@ -1,7 +1,7 @@
 // This plugin searches the document for all istances of a user input font and replaces them with set font
 
 var fontManager = NSFontManager.alloc();
-var fontList = fontManager.availableFontFamilies();
+var fontList = fontManager.availableFonts();
 log("font item 1 " + fontList[0]);
 
 var doc = doc || context.document,
@@ -15,7 +15,7 @@ var fonts_found = [];
 function createSelect(msg, items, selectedItemIndex){
   selectedItemIndex = selectedItemIndex || 0
 
-  var accessory = NSComboBox.alloc().initWithFrame(NSMakeRect(0,0,200,25))
+  var accessory = NSComboBox.alloc().initWithFrame(NSMakeRect(0,0,400,25))
   accessory.addItemsWithObjectValues(items)
   accessory.selectItemAtIndex(selectedItemIndex)
 
